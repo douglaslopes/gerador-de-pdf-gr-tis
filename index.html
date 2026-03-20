@@ -325,6 +325,45 @@
   #toast.success { border-color: var(--accent); }
   #toast.error { border-color: #ff4f4f; }
 
+  .quality-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .quality-label {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .quality-btns {
+    display: flex;
+    gap: 6px;
+  }
+
+  .q-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+
+  .q-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  .q-btn.active {
+    border-color: var(--accent);
+    background: rgba(232, 255, 71, 0.1);
+    color: var(--accent);
+  }
+
   .hint-row {
     text-align: center;
     font-size: 12px;
@@ -355,6 +394,14 @@
       Nome do arquivo:
       <input type="text" id="pdf-name" value="documento" placeholder="nome-do-pdf">
     </label>
+    <div class="quality-group">
+      <span class="quality-label">Qualidade:</span>
+      <div class="quality-btns">
+        <button class="q-btn" data-q="0.4">🪶 Baixa</button>
+        <button class="q-btn active" data-q="0.75">⚖️ Média</button>
+        <button class="q-btn" data-q="1.0">💎 Alta</button>
+      </div>
+    </div>
   </div>
 
   <button id="generate-btn" disabled>
@@ -372,6 +419,15 @@
 
   let files = []; // { file, dataUrl }
   let dragSrcIdx = null;
+  let quality = 0.75;
+
+  document.querySelectorAll('.q-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      quality = parseFloat(btn.dataset.q);
+    });
+  });
 
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
@@ -491,7 +547,16 @@
           first = false;
         }
         pdf.addPage([w, h], w > h ? 'landscape' : 'portrait');
-        pdf.addImage(files[i].dataUrl, 'PNG', 0, 0, w, h);
+        // Compress via canvas if quality < 1
+        let imgData = files[i].dataUrl;
+        if (quality < 1.0) {
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          imgData = canvas.toDataURL('image/jpeg', quality);
+        }
+
+        pdf.addImage(imgData, quality < 1.0 ? 'JPEG' : 'PNG', 0, 0, w, h);
         fill.style.width = `${Math.round(((i + 1) / imgs.length) * 100)}%`;
         await new Promise(r => setTimeout(r, 10));
       }
