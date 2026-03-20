@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imagens → PDF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --border: #2a2a30;
+    --accent: #e8ff47;
+    --accent2: #ff6b35;
+    --text: #f0f0f0;
+    --muted: #666670;
+    --radius: 16px;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 60px;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  .wrapper { position: relative; z-index: 1; width: 100%; max-width: 760px; }
+
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 100px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(36px, 7vw, 64px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 14px;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .sub {
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 300;
+  }
+
+  /* Drop Zone */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 56px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    background: var(--surface);
+    margin-bottom: 28px;
+  }
+
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: rgba(232, 255, 71, 0.04);
+  }
+
+  .dropzone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+    filter: grayscale(0.3);
+  }
+
+  .drop-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .drop-hint {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  /* File List */
+  #file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .file-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: slideIn 0.25s ease;
+    cursor: grab;
+    user-select: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .file-item:active { cursor: grabbing; }
+  .file-item.dragging { opacity: 0.4; }
+  .file-item.drag-target { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--border);
+  }
+
+  .file-info { flex: 1; min-width: 0; }
+
+  .file-name {
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-size {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .drag-handle {
+    color: var(--muted);
+    font-size: 18px;
+    flex-shrink: 0;
+    cursor: grab;
+  }
+
+  .remove-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    transition: color 0.15s;
+    flex-shrink: 0;
+  }
+  .remove-btn:hover { color: #ff4f4f; }
+
+  /* Order badge */
+  .order-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--border);
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--accent);
+  }
+
+  /* Options */
+  .options {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .options label {
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .options input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    width: 200px;
+    transition: border-color 0.15s;
+  }
+  .options input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  /* Generate button */
+  #generate-btn {
+    width: 100%;
+    padding: 18px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  #generate-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(232, 255, 71, 0.3);
+  }
+  #generate-btn:active:not(:disabled) { transform: translateY(0); }
+  #generate-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  /* Progress */
+  #progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 99px;
+    margin-top: 16px;
+    overflow: hidden;
+    display: none;
+  }
+  #progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 99px;
+  }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1e1e26;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 22px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 999;
+    white-space: nowrap;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--accent); }
+  #toast.error { border-color: #ff4f4f; }
+
+  .hint-row {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <header>
+    <div class="badge">Ferramenta gratuita</div>
+    <h1>Imagens<br><span>→ PDF</span></h1>
+    <p class="sub">Arraste, ordene e gere seu PDF em segundos. Tudo no navegador.</p>
+  </header>
+
+  <div class="dropzone" id="dropzone">
+    <input type="file" id="file-input" accept="image/*" multiple>
+    <span class="drop-icon">🖼️</span>
+    <div class="drop-title">Clique ou arraste as imagens aqui</div>
+    <div class="drop-hint">PNG, JPG, WEBP — sem limite de arquivos</div>
+  </div>
+
+  <div id="file-list"></div>
+
+  <div class="options" id="options-row" style="display:none">
+    <label>
+      Nome do arquivo:
+      <input type="text" id="pdf-name" value="documento" placeholder="nome-do-pdf">
+    </label>
+  </div>
+
+  <button id="generate-btn" disabled>
+    <span id="btn-icon">⬇️</span>
+    <span id="btn-label">Gerar PDF</span>
+  </button>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+  <p class="hint-row">Arraste os itens para reordenar as páginas</p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const { jsPDF } = window.jspdf;
+
+  let files = []; // { file, dataUrl }
+  let dragSrcIdx = null;
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+  const fileList  = document.getElementById('file-list');
+  const genBtn    = document.getElementById('generate-btn');
+  const btnLabel  = document.getElementById('btn-label');
+  const btnIcon   = document.getElementById('btn-icon');
+  const progress  = document.getElementById('progress-bar');
+  const fill      = document.getElementById('progress-fill');
+  const optRow    = document.getElementById('options-row');
+  const pdfName   = document.getElementById('pdf-name');
+  const toast     = document.getElementById('toast');
+
+  // Drag & drop on dropzone
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+  });
+  fileInput.addEventListener('change', () => addFiles([...fileInput.files]));
+
+  function addFiles(newFiles) {
+    const imgs = newFiles.filter(f => f.type.startsWith('image/'));
+    if (!imgs.length) return showToast('Nenhuma imagem encontrada.', 'error');
+    const promises = imgs.map(f => readFile(f));
+    Promise.all(promises).then(results => {
+      files.push(...results);
+      render();
+    });
+  }
+
+  function readFile(f) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve({ file: f, dataUrl: e.target.result });
+      reader.readAsDataURL(f);
+    });
+  }
+
+  function render() {
+    fileList.innerHTML = '';
+    files.forEach((item, idx) => {
+      const div = document.createElement('div');
+      div.className = 'file-item';
+      div.draggable = true;
+      div.dataset.idx = idx;
+
+      div.innerHTML = `
+        <div class="order-badge">${idx + 1}</div>
+        <img class="thumb" src="${item.dataUrl}" alt="">
+        <div class="file-info">
+          <div class="file-name">${item.file.name}</div>
+          <div class="file-size">${(item.file.size / 1024).toFixed(1)} KB</div>
+        </div>
+        <span class="drag-handle">⠿</span>
+        <button class="remove-btn" data-idx="${idx}">×</button>
+      `;
+
+      // Reorder drag events
+      div.addEventListener('dragstart', e => {
+        dragSrcIdx = idx;
+        setTimeout(() => div.classList.add('dragging'), 0);
+      });
+      div.addEventListener('dragend', () => div.classList.remove('dragging'));
+      div.addEventListener('dragover', e => { e.preventDefault(); div.classList.add('drag-target'); });
+      div.addEventListener('dragleave', () => div.classList.remove('drag-target'));
+      div.addEventListener('drop', e => {
+        e.preventDefault();
+        div.classList.remove('drag-target');
+        if (dragSrcIdx === null || dragSrcIdx === idx) return;
+        const moved = files.splice(dragSrcIdx, 1)[0];
+        files.splice(idx, 0, moved);
+        dragSrcIdx = null;
+        render();
+      });
+
+      // Remove
+      div.querySelector('.remove-btn').addEventListener('click', () => {
+        files.splice(idx, 1);
+        render();
+      });
+
+      fileList.appendChild(div);
+    });
+
+    genBtn.disabled = files.length === 0;
+    optRow.style.display = files.length > 0 ? 'flex' : 'none';
+  }
+
+  genBtn.addEventListener('click', async () => {
+    if (!files.length) return;
+    genBtn.disabled = true;
+    btnIcon.textContent = '⏳';
+    btnLabel.textContent = 'Gerando…';
+    progress.style.display = 'block';
+    fill.style.width = '0%';
+
+    try {
+      await new Promise(r => setTimeout(r, 30));
+
+      // Load all images to get dimensions
+      const imgs = await Promise.all(files.map(item => loadImage(item.dataUrl)));
+
+      // Use first image dimensions for PDF page size
+      const pdf = new jsPDF({ unit: 'px', hotfixes: ['px_scaling'] });
+      let first = true;
+
+      for (let i = 0; i < imgs.length; i++) {
+        const img = imgs[i];
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+
+        if (first) {
+          pdf.deletePage(1);
+          first = false;
+        }
+        pdf.addPage([w, h], w > h ? 'landscape' : 'portrait');
+        pdf.addImage(files[i].dataUrl, 'PNG', 0, 0, w, h);
+        fill.style.width = `${Math.round(((i + 1) / imgs.length) * 100)}%`;
+        await new Promise(r => setTimeout(r, 10));
+      }
+
+      const name = (pdfName.value.trim() || 'documento').replace(/\.pdf$/i, '') + '.pdf';
+      pdf.save(name);
+      showToast('✅ PDF baixado com sucesso!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('❌ Erro ao gerar PDF.', 'error');
+    } finally {
+      genBtn.disabled = false;
+      btnIcon.textContent = '⬇️';
+      btnLabel.textContent = 'Gerar PDF';
+      setTimeout(() => { progress.style.display = 'none'; fill.style.width = '0%'; }, 600);
+    }
+  });
+
+  function loadImage(src) {
+    return new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => res(img);
+      img.onerror = rej;
+      img.src = src;
+    });
+  }
+
+  function showToast(msg, type = '') {
+    toast.textContent = msg;
+    toast.className = 'show ' + type;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toast.className = '', 3000);
+  }
+</script>
+</body>
+</html>
